@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion de Tâches - Trello</title>
+    
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js via CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Icônes Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        .task-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .task-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        
+        .column {
+            min-height: 400px;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 bg-slate-50">
+    
+    <div x-data="gestionTaches()" class="max-w-7xl mx-auto">
+        
+        <header class="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-list-check text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-slate-900">Gestion de Tâches</h1>
+                        <p class="text-sm text-gray-500">Organisez votre travail</p>
+                    </div>
+                </div>
+                
+                <!-- Compteur de tâches -->
+                <div class="flex items-center gap-3 text-sm">
+                    <div class="px-4 py-2 rounded-xl border border-red-200 bg-red-50/50">
+                        <span class="text-gray-600 text-xs">À faire</span>
+                        <div class="text-2xl font-bold text-red-600" x-text="nombreTaches('À faire')"></div>
+                    </div>
+                    <div class="px-4 py-2 rounded-xl border border-amber-200 bg-amber-50/50">
+                        <span class="text-gray-600 text-xs">En cours</span>
+                        <div class="text-2xl font-bold text-amber-600" x-text="nombreTaches('En cours')"></div>
+                    </div>
+                    <div class="px-4 py-2 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                        <span class="text-gray-600 text-xs">Terminé</span>
+                        <div class="text-2xl font-bold text-emerald-600" x-text="nombreTaches('Terminé')"></div>
+                    </div>
+                    
+                </div>
+            </div>
+        </header>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5 mb-6">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1 relative">
+                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input 
+                        type="text" 
+                        x-model="recherche" 
+                        placeholder="Rechercher une tâche..."
+                        class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:border-slate-900 focus:ring-2 focus:ring-slate-900 focus:ring-opacity-20 transition">
+                </div>
+                
+                <div class="md:w-56 relative">
+                    <i class="fas fa-filter absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <select 
+                        x-model="filtreStatut" 
+                        class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:border-slate-900 focus:ring-2 focus:ring-slate-900 focus:ring-opacity-20 bg-white appearance-none cursor-pointer transition">
+                        <option value="">Tous les statuts</option>
+                        <option value="À faire">À faire</option>
+                        <option value="En cours">En cours</option>
+                        <option value="Terminé">Terminé</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button 
+                        @click="recherche = ''; filtreStatut = ''"
+                        class="px-5 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition font-medium">
+                        Réinitialiser
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6" x-show="!afficherFormulaire">
+            <button 
+                @click="nouvelleTache(); afficherFormulaire = true"
+                class="w-full md:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 active:scale-[0.98] transition font-medium flex items-center justify-center gap-2">
+                <i class="fas fa-plus"></i>
+                Nouvelle tâche
+            </button>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-6 mb-6" x-show="afficherFormulaire">
+            <h2 class="text-xl font-bold text-slate-900 mb-6">
+                <span x-text="tacheEnEdition.id !== null ? '✏️ Modifier la tâche' : '➕ Nouvelle tâche'"></span>
+            </h2>
+            
+            <form @submit.prevent="enregistrerTache()" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">
+                        Titre <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        x-model="tacheEnEdition.titre" 
+                        required
+                        placeholder="Ex: Créer la maquette du site..."
+                        class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-slate-900 focus:ring-2 focus:ring-slate-900 focus:ring-opacity-20 transition">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">
+                        Description
+                    </label>
+                    <textarea 
+                        x-model="tacheEnEdition.description" 
+                        rows="3"
+                        placeholder="Décrivez votre tâche en détail..."
+                        class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-slate-900 focus:ring-2 focus:ring-slate-900 focus:ring-opacity-20 transition resize-none"></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">
+                        Statut
+                    </label>
+                    <select 
+                        x-model="tacheEnEdition.statut" 
+                        class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-slate-900 focus:ring-2 focus:ring-slate-900 focus:ring-opacity-20 bg-white cursor-pointer transition">
+                        <option value="À faire">À faire</option>
+                        <option value="En cours">En cours</option>
+                        <option value="Terminé">Terminé</option>
+                    </select>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button 
+                        type="submit"
+                        class="flex-1 px-6 py-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 active:scale-[0.98] transition font-medium">
+                        <span x-text="tacheEnEdition.id !== null ? 'Modifier' : 'Enregistrer'"></span>
+                    </button>
+                    
+                    <button 
+                        type="button"
+                        @click="annulerFormulaire()"
+                        class="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 active:scale-[0.98] transition font-medium">
+                        Annuler
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <div class="column bg-white border border-gray-200 rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-5 pb-3 border-b border-gray-200">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                        À faire
+                    </h2>
+                    <span class="bg-red-50 text-red-600 px-3 py-1 rounded-full text-sm font-bold" x-text="nombreTaches('À faire')"></span>
+                </div>
+                
+                <div class="space-y-3">
+                    <template x-for="tache in tachesFiltrees" :key="tache.id">
+                        <div x-show="tache.statut === 'À faire'" class="task-card bg-gray-50 border border-gray-200 rounded-xl p-4">
+                            <h3 class="font-bold text-gray-800 mb-2" x-text="tache.titre"></h3>
+                            <p class="text-sm text-gray-600 mb-3" x-text="tache.description || 'Aucune description'"></p>
+                            <div class="flex gap-2 mt-4">
+                                <button 
+                                    @click="modifierTache(tache)"
+                                    class="flex-1 px-3 py-2 bg-white border border-gray-200 text-slate-700 rounded-lg hover:bg-slate-50 transition text-sm font-medium">
+                                    Modifier
+                                </button>
+                                <button 
+                                    @click="changerStatut(tache)"
+                                    class="flex-1 px-3 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition text-sm font-medium">
+                                    →
+                                </button>
+                                <button 
+                                    @click="demanderSuppression(tache)"
+                                    class="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition text-sm">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="column bg-white border border-gray-200 rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-5 pb-3 border-b border-gray-200">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                        En cours
+                    </h2>
+                    <span class="bg-amber-50 text-amber-600 px-3 py-1 rounded-full text-sm font-bold" x-text="nombreTaches('En cours')"></span>
+                </div>
+                
+                <div class="space-y-3">
+                    <template x-for="tache in tachesFiltrees" :key="tache.id">
+                        <div x-show="tache.statut === 'En cours'" class="task-card bg-gray-50 border border-gray-200 rounded-xl p-4">
+                            <h3 class="font-bold text-gray-800 mb-2" x-text="tache.titre"></h3>
+                            <p class="text-sm text-gray-600 mb-3" x-text="tache.description || 'Aucune description'"></p>
+                            <div class="flex gap-2 mt-4">
+                                <button 
+                                    @click="modifierTache(tache)"
+                                    class="flex-1 px-3 py-2 bg-white border border-gray-200 text-slate-700 rounded-lg hover:bg-slate-50 transition text-sm font-medium">
+                                    Modifier
+                                </button>
+                                <button 
+                                    @click="changerStatut(tache)"
+                                    class="flex-1 px-3 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition text-sm font-medium">
+                                    ✓
+                                </button>
+                                <button 
+                                    @click="demanderSuppression(tache)"
+                                    class="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition text-sm">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="column bg-white border border-gray-200 rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-5 pb-3 border-b border-gray-200">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Terminé
+                    </h2>
+                    <span class="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-sm font-bold" x-text="nombreTaches('Terminé')"></span>
+                </div>
+                
+                <div class="space-y-3">
+                    <template x-for="tache in tachesFiltrees" :key="tache.id">
+                        <div x-show="tache.statut === 'Terminé'" class="task-card bg-gray-50 border border-gray-200 rounded-xl p-4 opacity-75">
+                            <h3 class="font-bold text-gray-800 mb-2 line-through" x-text="tache.titre"></h3>
+                            <p class="text-sm text-gray-600 mb-3" x-text="tache.description || 'Aucune description'"></p>
+                            <div class="flex gap-2 mt-4">
+                                <button 
+                                    @click="modifierTache(tache)"
+                                    class="flex-1 px-3 py-2 bg-white border border-gray-200 text-slate-700 rounded-lg hover:bg-slate-50 transition text-sm font-medium">
+                                    Modifier
+                                </button>
+                                <button 
+                                    @click="demanderSuppression(tache)"
+                                    class="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition text-sm">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+
+        <div 
+            x-show="afficherModalSuppression" 
+            @click.away="annulerSuppression()"
+            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            
+            <div class="bg-white rounded-2xl border border-gray-200 p-6 max-w-md w-full text-slate-900">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center">
+                        <span class="text-2xl">⚠️</span>
+                    </div>
+                    <h3 class="text-xl font-bold">Confirmer la suppression</h3>
+                </div>
+                
+                <p class="text-gray-600 mb-6">
+                    Êtes-vous sûr de vouloir supprimer la tâche <strong class="text-slate-900" x-text="tacheASupprimer?.titre"></strong> ?
+                    Cette action est irréversible.
+                </p>
+                
+                <div class="flex gap-3">
+                    <button 
+                        @click="confirmerSuppression()"
+                        class="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 active:scale-[0.98] transition font-medium">
+                        Supprimer
+                    </button>
+                    <button 
+                        @click="annulerSuppression()"
+                        class="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 active:scale-[0.98] transition font-medium">
+                        Annuler
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="listeTaches.length === 0" class="bg-white border border-gray-200 rounded-2xl p-12 text-center text-slate-900">
+            <div class="text-6xl mb-4">📋</div>
+            <h3 class="text-xl font-bold text-slate-900 mb-2">Aucune tâche pour le moment</h3>
+            <p class="text-gray-500">Commencez par ajouter votre première tâche !</p>
+        </div>
+
+        <div x-show="listeTaches.length > 0 && tachesFiltrees.length === 0" class="bg-white border border-gray-200 rounded-2xl p-12 text-center text-slate-900">
+            <div class="text-6xl mb-4">🔍</div>
+            <h3 class="text-xl font-bold text-slate-900 mb-2">Aucune tâche trouvée</h3>
+            <p class="text-gray-500">Essayez de modifier vos critères de recherche.</p>
+        </div>
+
+    </div>
+
+    <script>
+        function gestionTaches() {
+            return {
+                listeTaches: [],
+                afficherFormulaire: false,
+                afficherModalSuppression: false,
+                recherche: '',
+                filtreStatut: '',
+                storageKey: 'taches',
+                tacheEnEdition: { id: null, titre: '', description: '', statut: 'À faire' },
+                tacheASupprimer: null,
+                // init: charge les données et active la sauvegarde automatique
+                init() {
+                    this.chargerTaches();
+                    this.$watch('listeTaches', () => this.sauvegarderTaches());
+                },
+                // tachesFiltrees: renvoie la liste filtrée par recherche et statut
+                get tachesFiltrees() {
+                    let resultat = this.listeTaches;
+                    const rechercheMin = this.recherche.trim().toLowerCase();
+                    if (rechercheMin) resultat = resultat.filter(t => (t.titre || '').toLowerCase().includes(rechercheMin));
+                    if (this.filtreStatut) resultat = resultat.filter(t => t.statut === this.filtreStatut);
+                    return resultat;
+                },
+                nombreTaches(statut) {
+                    return this.listeTaches.filter(t => t.statut === statut).length;
+                },
+                // chargerTaches: lit le localStorage ou crée des exemples
+                chargerTaches() {
+                    const brut = localStorage.getItem(this.storageKey);
+                    if (brut) { this.listeTaches = JSON.parse(brut); return; }
+                    this.listeTaches = [
+                        { id: 1, titre: 'Apprendre Alpine.js', description: 'Bases et réactivité', statut: 'À faire' },
+                        { id: 2, titre: 'Créer un jeu type league of legends', description: 'Node.js / Express', statut: 'En cours' },
+                        { id: 3, titre: 'Aider Matthieu à finir son setup', description: 'Requêtes et exercices', statut: 'Terminé' },
+                    ];
+                    this.sauvegarderTaches();
+                },
+                // sauvegarderTaches: écrit la liste dans le localStorage
+                sauvegarderTaches() {
+                    localStorage.setItem(this.storageKey, JSON.stringify(this.listeTaches));
+                },
+                resetEdition() {
+                    this.tacheEnEdition = { id: null, titre: '', description: '', statut: 'À faire' };
+                },
+                nouvelleTache() { this.resetEdition(); },
+                // enregistrerTache: ajoute ou met à jour selon la présence d'un id
+                enregistrerTache() {
+                    if (this.tacheEnEdition.titre.trim() === '') { alert('Le titre est obligatoire !'); return; }
+                    if (this.tacheEnEdition.id !== null) {
+                        const i = this.listeTaches.findIndex(t => t.id === this.tacheEnEdition.id);
+                        if (i !== -1) this.listeTaches[i] = { ...this.tacheEnEdition };
+                    } else {
+                        this.listeTaches.push({ id: Date.now(), titre: this.tacheEnEdition.titre, description: this.tacheEnEdition.description, statut: this.tacheEnEdition.statut });
+                    }
+                    this.annulerFormulaire();
+                },
+                modifierTache(tache) {
+                    this.tacheEnEdition = { ...tache };
+                    this.afficherFormulaire = true;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                },
+                annulerFormulaire() { this.afficherFormulaire = false; this.resetEdition(); },
+                // changerStatut: fait progresser le statut (À faire -> En cours -> Terminé)
+                changerStatut(tache) {
+                    const ordre = ['À faire', 'En cours', 'Terminé'];
+                    const i = ordre.indexOf(tache.statut);
+                    tache.statut = ordre[Math.min(i + 1, ordre.length - 1)];
+                },
+                demanderSuppression(tache) { this.tacheASupprimer = tache; this.afficherModalSuppression = true; },
+                // confirmerSuppression: supprime la tâche validée dans le modal
+                confirmerSuppression() {
+                    if (this.tacheASupprimer) {
+                        const i = this.listeTaches.findIndex(t => t.id === this.tacheASupprimer.id);
+                        if (i !== -1) this.listeTaches.splice(i, 1);
+                    }
+                    this.annulerSuppression();
+                },
+                annulerSuppression() { this.afficherModalSuppression = false; this.tacheASupprimer = null; },
+            }
+        }
+    </script>
+
+</body>
+</html>
+
